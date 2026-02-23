@@ -1,122 +1,255 @@
-# SCATest - Security Tools Benchmark
+# SCA Security Benchmark Report: Comparative Analysis of Security Tools
 
-A comprehensive benchmark comparing security analysis tools (SAST and LLMs) for vulnerability detection in Python/Flask applications.
+**Date:** February 22, 2026  
+**Code Analyzed:** SCATest.py (Flask - Python)  
+**Total Real Vulnerabilities:** 12  
+**Reference:** This report uses verified vulnerability data from [Vulnerabilities.md](Vulnerabilities.md)
 
-## Overview
+---
 
-This project evaluates the effectiveness of various security tools in detecting vulnerabilities in a deliberately vulnerable Flask application (`SCATest.py`). The benchmark compares traditional SAST tools (Fortify) with Large Language Models (LLMs) to determine which approach provides better security analysis.
+## Executive Summary
 
-## Results Summary
+This report presents a rigorous comparative analysis of 5 security tools:
 
-| Tool | Precision | Vulnerabilities Detected |
-|------|-----------|-------------------------|
-| **Claude** | 100% | 13/12 |
-| **DeepSeek** | 92% | 11/12 |
-| **ChatGPT** | 92% | 11/12 |
-| **Gemini** | 67% | 8/12 |
-| **Fortify** | 0% | 2/12 |
+- **Fortify** (Traditional SAST)
+- **Gemini 3 Flash Pro**
+- **DeepSeek**
+- **ChatGPT**
+- **Claude Sonnet 4.6**
 
-## Key Findings
+### Key Metrics
 
-- **LLMs significantly outperform traditional SAST** for complex vulnerability detection
-- **Claude** achieved 100% precision in detecting all 12 verified vulnerabilities
-- **Fortify** failed to detect critical vulnerabilities (RCE, SQLi, SSTI, etc.)
-- Only 2 vulnerabilities detected by Fortify vs 8-13 by LLMs
+| Tool | Detected | Precision | Critical | High | Medium | Low |
+|------|----------|-----------|----------|------|--------|-----|
+| **Fortify** | 2 | 0% | 0 | 2 | 0 | 0 |
+| **Gemini** | 8 | 67% | 3 | 3 | 2 | 0 |
+| **DeepSeek** | 11 | 92% | 4 | 5 | 2 | 0 |
+| **ChatGPT** | 11 | 92% | 3 | 5 | 3 | 0 |
+| **Claude** | 13 | 100% | 4 | 7 | 2 | 1 |
 
-## Project Structure
+---
 
-```
-SCATest/
-├── SCATest.py           # Vulnerable Flask application (DO NOT USE IN PRODUCTION)
-├── Vulnerabilities.md       # Verified vulnerabilities reference
-├── PROMPT               # Security analysis prompt used for LLMs
-├── README.md            # This file
-├── docs/
-│   ├── REPORT.md       # Main benchmark report (English)
-│   ├── REPORT_ES.md     # Benchmark report (Spanish)
-│   └── images/
-│       ├── grafico1_distribucion.png
-│       ├── grafico2_precision.png
-│       ├── grafico3_heatmap.png
-│       └── grafico4_comparacion.png
-├── SCATest_CWETop25.md  # Fortify analysis results
-├── Gemini3FlashPro (Paid Subscription)     # Gemini analysis
-├── DeepSeek (Free Standard Subscription)     # DeepSeek analysis
-├── ChatGPT (Free Standard Subscription)     # ChatGPT analysis
-└── AnthropicClaudeSonnet4.6 (Free Standard Subscription)  # Claude analysis
-```
+## Benchmark Charts
 
-## Vulnerabilities Analyzed
+### Chart 1: Vulnerability Distribution by Severity
 
-### Critical (4)
-1. **SQL Injection** - CWE-89 / OWASP A03
-2. **Server-Side Template Injection (SSTI)** - CWE-94 / OWASP A03
-3. **Command Injection** - CWE-78 / OWASP A03
-4. **Insecure Deserialization** - CWE-502 / OWASP A08
+![Distribution](docs/images/grafico1_distribucion.png)
 
-### High (7)
-5. **Path Traversal** - CWE-22 / OWASP A01
-6. **SSRF** - CWE-918 / OWASP A10
-7. **Authorization Flaw** - CWE-287 / OWASP A01
-8. **Debug Mode** - CWE-11 / OWASP A05
+### Chart 2: Detection Precision
 
-### Medium (1)
-9. **Hardcoded Secret** - CWE-798 / OWASP A02
-10. **Weak Hashing (MD5)** - CWE-327 / OWASP A02
-11. **Open Redirect** - CWE-601 / OWASP A01
+![Precision](docs/images/grafico2_precision.png)
 
-### Low (1)
-12. **TOCTOU/Race Condition** - CWE-362 / OWASP A01
+### Chart 3: Detection Heatmap by Category
 
-See [Vulnerabilities.md](Vulnerabilities.md) for complete details.
+![Heatmap](docs/images/grafico3_heatmap.png)
 
-## Tools Compared
+### Chart 4: Visual Comparison
 
-### Traditional SAST
-- **Fortify Static Code Analyzer** - Enterprise SAST tool by Micro Focus
+![Comparison](docs/images/grafico4_comparacion.png)
 
-### Large Language Models
-- **Claude Sonnet 4.6** - Anthropic
-- **ChatGPT** - OpenAI
-- **DeepSeek** - DeepSeek
-- **Gemini 3 Flash Pro** - Google
+---
 
-## Report
+## Detailed Detection Table
 
-Full benchmark report available in:
-- [docs/REPORT.md](docs/REPORT.md) (English)
-- [docs/REPORT_ES.md](docs/REPORT_ES.md) (Spanish)
+| ID | Vulnerability | Severity | Fortify | Gemini | DeepSeek | ChatGPT | Claude |
+|----|---------------|----------|---------|--------|----------|---------|--------|
+| 1 | Hardcoded Secret | Medium | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 2 | SQL Injection | Critical | ✗ | ✓ | ✓ | ✓ | ✓ |
+| 3 | Weak Hashing (MD5) | Medium | ✗ | ✓ | ✗ | ✓ | ✓ |
+| 4 | Path Traversal | High | ✗ | ✓ | ✓ | ✓ | ✓ |
+| 5 | SSTI | Critical | ✗ | ✓ | ✓ | ✓ | ✓ |
+| 6 | Command Injection | Critical | ✗ | ✓ | ✓ | ✓ | ✓ |
+| 7 | Insecure Deserialization | Critical | ✗ | ✓ | ✓ | ✓ | ✓ |
+| 8 | SSRF | High | ✗ | ✓ | ✓ | ✓ | ✓ |
+| 9 | Open Redirect | Medium | ✗ | ✓ | ✓ | ✓ | ✓ |
+| 10 | Authorization Flaw | High | ✗ | ✓ | ✓ | ✓ | ✓ |
+| 11 | TOCTOU/Race Condition | Low | ✗ | ✗ | ✓ | ✓ | ✓ |
+| 12 | Debug Mode | High | ✗ | ✓ | ✓ | ✓ | ✓ |
+
+---
+
+## Failure Analysis
+
+### Fortify - 10 vulnerabilities not detected
+
+| ID | Vulnerability | Severity | OWASP Category | Failure Reason |
+|----|---------------|----------|----------------|----------------|
+| 2 | SQL Injection | Critical | OWASP A03 | Did not detect SQL interpolation with % formatting |
+| 3 | Weak Hashing (MD5) | Medium | OWASP A02 | Did not detect MD5 without secret |
+| 4 | Path Traversal | High | OWASP A01 | Did not detect defective path validation |
+| 5 | SSTI | Critical | OWASP A03 | Did not detect Jinja2 injection |
+| 6 | Command Injection | Critical | OWASP A03 | Did not detect OS command injection |
+| 7 | Insecure Deserialization | Critical | OWASP A08 | Did not detect insecure deserialization |
+| 8 | SSRF | High | OWASP A10 | Did not detect lack of URL validation |
+| 9 | Open Redirect | Medium | OWASP A01 | Did not detect defective logic |
+| 10 | Authorization Flaw | High | OWASP A01 | Did not detect authorization bypass |
+| 11 | TOCTOU/Race Condition | Low | Race Condition | Did not detect race condition |
+| 12 | Debug Mode | High | OWASP A05 | Did not detect debug mode |
+
+### LLMs - Individual Failures
+
+| ID | Vulnerability | Tool | Failure Reason |
+|----|---------------|------|----------------|
+| 3 | Weak Hash (MD5) | DeepSeek | Did not detect use of MD5 without secret |
+| 11 | TOCTOU/Race Condition | Gemini | Did not detect race condition |
+
+---
+
+## Statistical Analysis
+
+### Descriptive Statistics
+
+| Metric | Value |
+|--------|-------|
+| Total Real Vulnerabilities | 12 |
+| Mean Detection (LLMs) | 10.8 |
+| Standard Deviation (LLMs) | 2.1 |
+| Best Tool | Claude (100%) |
+| Worst Tool | Fortify (0%) |
+| Average Precision (all) | 70% |
+
+### Vulnerabilities by OWASP Category
+
+| OWASP Category | Count | Predominant Severity |
+|----------------|-------|----------------------|
+| A01 - Broken Access Control | 3 | High |
+| A02 - Cryptographic Failures | 2 | Medium |
+| A03 - Injection | 4 | Critical |
+| A05 - Security Misconfiguration | 1 | High |
+| A08 - Software/Data Integrity Failures | 1 | Critical |
+| A10 - Server-Side Request Forgery | 1 | High |
+
+---
 
 ## References
 
-- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-- [CWE Top 25](https://cwe.mitre.org/top25/)
-- [Fortify Official](https://www.microfocus.com/en-us/products/static-code-analysis-sast/overview)
-- [Claude Official](https://www.anthropic.com/claude)
-- [ChatGPT Official](https://chat.openai.com/)
-- [DeepSeek Official](https://www.deepseek.com/)
-- [Gemini Official](https://gemini.google.com/)
+### Security Tools
 
-## Disclaimer
+1. **Fortify** - Micro Focus Fortify Static Code Analyzer
+   - Official: https://www.microfocus.com/en-us/products/static-code-analysis-sast/overview
 
-⚠️ **WARNING**: `SCATest.py` contains intentionally vulnerable code for educational and testing purposes only. **DO NOT DEPLOY** this code in any production environment.
+2. **Gemini** - Google Gemini
+   - Official: https://gemini.google.com/
 
-The vulnerable code was deliberately written for security testing and benchmark purposes. Future versions will include additional vulnerable samples in different frameworks and languages.
+3. **DeepSeek** - DeepSeek LLM
+   - Official: https://www.deepseek.com/
+
+4. **ChatGPT** - OpenAI ChatGPT
+   - Official: https://chat.openai.com/
+
+5. **Claude** - Anthropic Claude
+   - Official: https://www.anthropic.com/claude
+
+### Vulnerability Standards
+
+1. **OWASP Top 10** - Open Web Application Security Project
+   - Official: https://owasp.org/www-project-top-ten/
+
+2. **CWE** - Common Weakness Enumeration
+   - Official: https://cwe.mitre.org/
+
+3. **CVE** - Common Vulnerabilities and Exposures
+   - Official: https://cve.mitre.org/
+
+---
+
+## Conclusions
+
+### Key Findings
+
+1. **LLMs significantly outperform Fortify**: Claude, DeepSeek, and ChatGPT achieved +90% precision vs 0% for Fortify
+
+2. **Claude leads the benchmark**: 100% precision, detecting all real vulnerabilities
+
+3. **Fortify failed completely**: Only detected hardcoded secrets (static rule), failed on all critical vulnerabilities
+
+4. **LLM variability**: 
+   - Claude: 100% 
+   - DeepSeek: 92% 
+   - ChatGPT: 92% 
+   - Gemini: 67% (missed TOCTOU)
+
+### Implications
+
+- **For critical security**: Use Claude or DeepSeek/ChatGPT
+- **For compliance**: Combine Fortify + LLMs
+- **For quick analysis**: Gemini (67% in less time)
+
+---
+
+## Recommendations
+
+### Immediate Actions
+
+1. Replace Fortify with LLMs for complex vulnerability analysis
+2. Implement pipeline with multiple LLMs for complete coverage
+3. Keep Fortify only for regulatory compliance
+
+### Best Practices
+
+1. Use Claude for deep analysis
+2. Combine results from multiple tools
+3. Manually validate critical findings
+
+---
+
+## Appendix: Vulnerability Details
+
+### Real Vulnerabilities (Verified Reference)
+
+For detailed information on each vulnerability, see [Vulnerabilities.md](Vulnerabilities.md)
+
+1. **Hardcoded Secret** - CWE-798 / OWASP A02
+2. **SQL Injection** - CWE-89 / OWASP A03
+3. **Weak Hashing (MD5)** - CWE-327 / OWASP A02
+4. **Path Traversal** - CWE-22 / OWASP A01
+5. **SSTI** - CWE-94 / OWASP A03
+6. **Command Injection** - CWE-78 / OWASP A03
+7. **Insecure Deserialization** - CWE-502 / OWASP A08
+8. **SSRF** - CWE-918 / OWASP A10
+9. **Open Redirect** - CWE-601 / OWASP A01
+10. **Authorization Flaw** - CWE-287 / OWASP A01
+11. **TOCTOU/Race Condition** - CWE-362 / OWASP A01
+12. **Debug Mode** - CWE-11 / OWASP A05
+
+---
 
 ## Future Work
+
+This benchmark is designed to be expanded with future versions:
 
 - **Additional Vulnerable Code Samples**: New versions with different frameworks (Django, FastAPI, Node.js, etc.)
 - **More Security Tools**: Integration of additional SAST tools and LLMs
 - **Dynamic Analysis**: Integration of dynamic analysis tools (DAST)
 - **Comprehensive Testing**: Larger sample size for statistically significant results
 - **Multi-language Support**: Vulnerable code in multiple programming languages
-
-## License
-
-MIT License
+- **Real-world Scenarios**: Analysis of real-world vulnerable applications
 
 ---
 
-*Last Updated: February 22, 2026*
+## Project Files
+
+| File | Description |
+|------|-------------|
+| `SCATest.py` | Vulnerable Flask application (DO NOT USE IN PRODUCTION) |
+| `Vulnerabilities.md` | Verified vulnerabilities reference |
+| `PROMPT` | Security analysis prompt used for LLMs |
+| `SCATest_CWETop25.md` | Fortify analysis results |
+| `Gemini3FlashPro (Paid Subscription)` | Gemini analysis results |
+| `DeepSeek (Free Standard Subscription)` | DeepSeek analysis results |
+| `ChatGPT (Free Standard Subscription)` | ChatGPT analysis results |
+| `AnthropicClaudeSonnet4.6 (Free Standard Subscription)` | Claude analysis results |
+
+---
+
+## Disclaimer
+
+⚠️ **WARNING**: `SCATest.py` contains intentionally vulnerable code for educational and testing purposes only. **DO NOT DEPLOY** this code in any production environment.
+
+The vulnerable code was deliberately written for security testing and benchmark purposes.
+
+---
+
+*Report generated - February 22, 2026*
 
 *Research and Analysis: Marcelo Ernesto Burgos Cayupil*
