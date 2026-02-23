@@ -1,0 +1,446 @@
+Findings
+F1
+
+Title: SQL Injection in get_user
+
+Severity: Critical
+
+Location: get_user(u)
+
+q = "SELECT id, username, password FROM users WHERE username = '%s'" % u
+r = c.execute(q).fetchone()
+
+Root Cause:
+User input (u) is interpolated directly into the SQL query using string formatting without parameterization.
+
+Exploitation Scenario:
+An attacker submits:
+
+u=' OR 1=1 --
+
+Query becomes:
+
+SELECT id, username, password FROM users WHERE username = '' OR 1=1 --'
+
+This bypasses authentication and may return the first user record.
+
+Impact:
+
+Authentication bypass
+
+Data exfiltration
+
+Potential privilege escalation
+
+Remediation:
+Use parameterized queries:
+
+c.execute("SELECT id, username, password FROM users WHERE username = ?", (u,))
+
+Confidence Level: High
+
+F2
+
+Title: Remote Code Execution via Unsafe Deserialization
+
+Severity: Critical
+
+Location: deserialize(blob)
+
+return pickle.loads(base64.b64decode(blob))
+
+Root Cause:
+Direct use of pickle.loads() on attacker-controlled data.
+
+Exploitation Scenario:
+Attacker crafts a malicious pickle payload that executes arbitrary code upon deserialization.
+/load?data=<malicious_base64_pickle>
+
+Impact:
+
+Full remote code execution
+
+Complete system compromise
+
+Remediation:
+
+Do not use pickle with untrusted input
+
+Replace with json.loads() or safe structured formats
+
+Confidence Level: High
+
+F3
+
+Title: Command Injection in system_call
+
+Severity: Critical
+
+Location: system_call(x)
+
+cmd = "echo %s" % x
+return subprocess.getoutput(cmd)
+
+Root Cause:
+User input is interpolated into a shell command executed via shell context.
+
+Exploitation Scenario:
+
+/run?x=hello;id
+
+Executes:
+
+echo hello;id
+
+Impact:
+
+Arbitrary command execution
+
+System compromise
+
+Remediation:
+
+Avoid shell invocation
+
+Use subprocess.run(["echo", x], shell=False)
+
+Confidence Level: High
+
+F4
+
+Title: Server-Side Template Injection (SSTI)
+
+Severity: High
+
+Location: /view
+
+return render_template_string("<div>%s</div>" % t)
+
+Root Cause:
+Untrusted input embedded directly in a Jinja template.
+
+Exploitation Scenario:
+
+/view?t={{config.items()}}
+
+Can expose configuration including secret_key.
+
+Impact:
+
+Sensitive data disclosure
+
+Potential RCE via Jinja sandbox escapes
+
+Remediation:
+
+Use template variables:
+
+render_template_string("<div>{{ t }}</div>", t=t)
+
+Confidence Level: High
+
+F5
+
+Title: Path Traversal in read_local
+
+Severity: High
+
+Location: read_local(name)
+
+path = os.path.abspath(os.path.join(base, name))
+if base in path:
+
+Root Cause:
+Path validation uses substring check instead of strict prefix comparison.
+
+Exploitation Scenario:
+Crafted path like:
+
+name=../storage_malicious/../../etc/passwd
+
+base in path may still evaluate True.
+
+Impact:
+
+Arbitrary file read
+
+Credential disclosure
+
+Remediation:
+
+if path.startswith(base + os.sep):
+
+Confidence Level: Medium-High
+
+F6
+
+Title: Server-Side Request Forgery (SSRF)
+
+Severity: High
+
+Location: fetch_remote(u)
+
+return requests.get(u, timeout=2).text
+
+Root Cause:
+No validation of URL.
+
+Exploitation Scenario:
+
+/proxy?url=http://127.0.0.1:5000/admin?role=admin
+
+Access internal services.
+
+Impact:
+
+Internal service access
+
+Cloud metadata exposure
+
+Lateral movement
+
+Remediation:
+
+Restrict allowed domains
+
+Block internal IP ranges
+
+Confidence Level: High
+
+F7
+
+Title: Open Redirect in /next
+
+Severity: Medium
+
+Location:
+
+if n and n.startswith("/"):
+    return redirect(n)
+return redirect(n)
+
+Root Cause:
+Redirects arbitrary user input. Logic check is ineffective.
+
+Exploitation Scenario:
+
+/next?n=//evil.com
+
+Redirects externally.
+
+Impact:
+
+Phishing
+
+Token leakage
+
+Remediation:
+
+Strictly validate relative paths
+
+Use url_for
+
+Confidence Level: High
+
+F8
+
+Title: Hardcoded Secret Key
+
+Severity: Medium
+
+Location:
+
+app.secret_key = "prod_key_2024_internal"
+
+Root Cause:
+Secret embedded in source.
+
+Exploitation Scenario:
+If source exposed, attacker can forge session cookies.
+
+Impact:
+
+Session forgery
+
+Remediation:
+
+Load from environment variable
+
+Confidence Level: High
+
+F9
+
+Title: Weak Token Generation (MD5)
+
+Severity: Medium
+
+Location: compute_token
+
+return hashlib.md5(raw.encode()).hexdigest()
+
+Root Cause:
+Use of MD5 without secret.
+
+Exploitation Scenario:
+Token predictable since it’s MD5 of known JSON.
+
+Impact:
+
+Authentication token forgery
+
+Remediation:
+
+Use HMAC with secret:
+
+hmac.new(secret, raw, sha256)
+
+Confidence Level: High
+
+F10
+
+Title: Authorization Logic Bypass in /admin
+
+Severity: High
+
+Location:
+
+if role == "admin" or role == 1:
+
+Root Cause:
+Authorization based solely on query parameter.
+
+Exploitation Scenario:
+
+/admin?role=admin
+
+Impact:
+
+Privilege escalation
+
+Remediation:
+
+Use session-based authenticated role
+
+Do not trust request parameters
+
+Confidence Level: High
+
+F11
+
+Title: Debug Mode Enabled in Production
+
+Severity: High
+
+Location:
+
+app.run(debug=True)
+
+Root Cause:
+Debug mode enables Werkzeug debugger.
+
+Exploitation Scenario:
+If exception triggered, attacker may gain interactive console.
+
+Impact:
+
+Remote code execution
+
+Full compromise
+
+Remediation:
+
+Disable debug in production
+
+Confidence Level: High
+
+Summary
+
+Total findings: 11
+
+High/Critical findings: 8
+
+Observed Attack Surface
+
+Exposed endpoints:
+
+/login
+
+/view
+
+/file
+
+/run
+
+/load
+
+/proxy
+
+/next
+
+/admin
+
+/tmp
+
+Primary attack vectors:
+
+SQL execution
+
+Shell execution
+
+Template execution
+
+Python deserialization
+
+File system access
+
+Internal HTTP requests
+
+Redirect handling
+
+Weak auth logic
+
+Debug interface exposure
+
+The application trusts user input across multiple trust boundaries:
+
+HTTP → SQL
+
+HTTP → OS shell
+
+HTTP → Template engine
+
+HTTP → Python interpreter
+
+HTTP → File system
+
+HTTP → Internal network
+
+Overall Security Posture Rating
+
+2 / 10
+
+Multiple independent critical vulnerabilities allow full remote code execution, authentication bypass, and privilege escalation without chaining.
+
+Areas Where Static Analysis May Struggle
+
+Determining exploitability of path traversal due to substring validation logic nuance.
+
+Assessing practical exploitability of Jinja SSTI depending on environment configuration.
+
+Evaluating debugger PIN exposure feasibility.
+
+Understanding full SSRF impact without deployment context.
+
+Identifying real-world impact of MD5 token depending on usage context.
+
+If desired, I can next provide:
+
+An exploit chain demonstrating full compromise
+
+A prioritized remediation roadmap
+
+A hardened rewrite of the application
+
+A threat model diagram
+
+A secure code diff patch
