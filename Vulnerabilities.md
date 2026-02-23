@@ -1,176 +1,299 @@
-1️⃣ Hardcoded Secret
+# Verified Vulnerabilities Reference
 
-Ubicación:
+This document contains the complete list of verified vulnerabilities found in `SCATest.py`. Each vulnerability is documented with its location, severity, category, impact, and detection difficulty.
 
+---
+
+## Vulnerability List
+
+### 1. Hardcoded Secret
+
+**Location:** `SCATest.py:13`
+
+```python
 app.secret_key = "prod_key_2024_internal"
+```
 
-Categoría: OWASP A02 / A07
-Problema: secreto embebido en código → compromiso de sesiones si el repo se filtra.
-Detectabilidad SAST: Alta.
+**Category:** OWASP A02 / A07 - Cryptographic Failures / Security Misconfiguration  
+**Severity:** Medium  
+**Problem:** Secret embedded in source code → session compromise if repository is exposed.  
+**SAST Detectability:** High
 
-2️⃣ SQL Injection (indirecta)
+---
 
-Ubicación: get_user(u)
+### 2. SQL Injection (Indirect)
 
-q = "SELECT id, username, password FROM users WHERE username = '%s'" % u
+**Location:** `SCATest.py:31` (function `get_user`)
 
-Categoría: OWASP A03 – Injection
-Problema: interpolación directa vía % formatting.
-Flujo:
-request.form → normalize() → get_user() → execute()
-Detectabilidad: Alta (si Fortify sigue dataflow interprocedural).
+```python
+def get_user(u):
+    conn = db()
+    c = conn.cursor()
+    q = "SELECT id, username, password FROM users WHERE username = '%s'" % u
+    r = c.execute(q).fetchone()
+    conn.close()
+    return r
+```
 
-3️⃣ Weak Hashing (MD5 para token)
+**Category:** OWASP A03 - Injection  
+**Severity:** Critical  
+**Problem:** Direct string interpolation using `%` formatting in SQL query.  
+**Data Flow:** `request.form` → `normalize()` → `get_user()` → `execute()`  
+**SAST Detectability:** High (if Fortify follows interprocedural dataflow)
 
-Ubicación: compute_token()
+---
 
-return hashlib.md5(raw.encode()).hexdigest()
+### 3. Weak Hashing (MD5 for Token)
 
-Categoría: OWASP A02 – Cryptographic Failures
-Problema: MD5 inseguro para tokens.
-Detectabilidad: Alta.
+**Location:** `SCATest.py:38-39` (function `compute_token`)
 
-4️⃣ Path Traversal (bypass sutil)
+```python
+def compute_token(data):
+    raw = json.dumps(data)
+    return hashlib.md5(raw.encode()).hexdigest()
+```
 
-Ubicación: read_local(name)
+**Category:** OWASP A02 - Cryptographic Failures  
+**Severity:** Medium  
+**Problem:** MD5 is cryptographically broken and insecure for tokens.  
+**SAST Detectability:** High
 
-base = os.path.abspath("storage")
-path = os.path.abspath(os.path.join(base, name))
-if base in path:
+---
 
-Problema crítico:
-El check if base in path es incorrecto.
-Ejemplo bypass:
+### 4. Path Traversal (Subtle Bypass)
 
+**Location:** `SCATest.py:42-48` (function `read_local`)
+
+```python
+def read_local(name):
+    base = os.path.abspath("storage")
+    path = os.path.abspath(os.path.join(base, name))
+    if base in path:
+        with open(path) as f:
+            return f.read()
+    return ""
+```
+
+**Category:** OWASP A01 - Broken Access Control  
+**Severity:** High  
+**Problem:** The check `if base in path` is incorrect. It uses substring matching instead of proper path boundary validation.
+
+**Bypass Example:**
+```
 name = "../../etc/passwd"
+```
 
-Si el path final contiene el string storage en algún punto, pasa el check.
+If the final path contains the string "storage" anywhere, it passes the check.  
+**Correct validation should be:**
+```python
+if path.startswith(base + os.sep):
+```
 
-Debería usar:
+**SAST Detectability:** Medium (some tools don't detect defective validation)
 
-if path.startswith(base + os.sep)
+---
 
-Categoría: OWASP A01
-Detectabilidad: Media (algunas herramientas no detectan validación defectuosa).
+### 5. Server-Side Template Injection (SSTI)
 
-5️⃣ Server-Side Template Injection (SSTI)
+**Location:** `SCATest.py:77` (route `/view`)
 
-Ubicación: /view
+```python
+@app.route("/view")
+def view():
+    t = request.args.get("t", "hi")
+    return render_template_string("<div>%s</div>" % t)
+```
 
-render_template_string("<div>%s</div>" % t)
+**Category:** OWASP A03 - Injection  
+**Severity:** Critical  
+**Problem:** User input injected directly into Jinja template.  
+**Example Payload:** `{{7*7}}` returns `49`  
+**Impact:** Information disclosure, potentially RCE via Jinja sandbox escapes.  
+**SAST Detectability:** Medium-High
 
-Problema:
-Entrada del usuario inyectada directamente en plantilla Jinja.
-Payload: {{7*7}}
-Categoría: OWASP A03
-Detectabilidad: Media–Alta.
+---
 
-6️⃣ Command Injection (indirecta)
+### 6. Command Injection (Indirect)
 
-Ubicación: system_call(x)
+**Location:** `SCATest.py:55-57` (function `system_call`)
 
-cmd = "echo %s" % x
-subprocess.getoutput(cmd)
+```python
+def system_call(x):
+    cmd = "echo %s" % x
+    return subprocess.getoutput(cmd)
+```
 
-Flujo:
-request.args → system_call → subprocess.getoutput
+**Category:** OWASP A03 - Injection  
+**Severity:** Critical  
+**Problem:** User input directly interpolated into shell command.  
+**Data Flow:** `request.args` → `system_call` → `subprocess.getoutput`  
+**Example Payload:**
+```
+/run?x=hello; id
+```
 
-Payload ejemplo:
+**SAST Detectability:** High
 
-x=hello; id
+---
 
-Categoría: OWASP A03
-Detectabilidad: Alta.
+### 7. Insecure Deserialization
 
-7️⃣ Insecure Deserialization
+**Location:** `SCATest.py:60-61` (function `deserialize`)
 
-Ubicación: deserialize(blob)
+```python
+def deserialize(blob):
+    return pickle.loads(base64.b64decode(blob))
+```
 
-pickle.loads(base64.b64decode(blob))
+**Category:** OWASP A08 - Software and Data Integrity Failures  
+**Severity:** Critical  
+**Problem:** `pickle.loads()` executes arbitrary Python code during unpickling.  
+**Impact:** RCE if malicious payload is provided.  
+**SAST Detectability:** High (direct rule)
 
-Categoría: OWASP A08
-Impacto: RCE si payload malicioso.
-Detectabilidad: Alta (regla directa).
+---
 
-8️⃣ SSRF
+### 8. Server-Side Request Forgery (SSRF)
 
-Ubicación: fetch_remote(u)
+**Location:** `SCATest.py:51-52` (function `fetch_remote`)
 
-requests.get(u, timeout=2)
+```python
+def fetch_remote(u):
+    return requests.get(u, timeout=2).text
+```
 
-Problema:
-No hay validación de esquema, IP interna ni metadata endpoint.
+**Category:** OWASP A10 - Server-Side Request Forgery  
+**Severity:** High  
+**Problem:** No validation of URL scheme, internal IP, or metadata endpoint.
 
-Ejemplo:
+**Example:**
+```
+/proxy?url=http://169.254.169.254/latest/meta-data/
+```
 
-http://169.254.169.254/latest/meta-data/
+**SAST Detectability:** Medium (some tools only detect basic patterns)
 
-Categoría: OWASP A10
-Detectabilidad: Media (algunas herramientas solo detectan patrón básico).
+---
 
-9️⃣ Open Redirect (lógica defectuosa)
+### 9. Open Redirect (Defective Logic)
 
-Ubicación: /next
+**Location:** `SCATest.py:105-110` (route `/next`)
 
-if n and n.startswith("/"):
+```python
+@app.route("/next")
+def go():
+    n = request.args.get("n")
+    if n and n.startswith("/"):
+        return redirect(n)
     return redirect(n)
-return redirect(n)
+```
 
-Problema:
-La validación no cambia el comportamiento.
-Siempre redirige.
+**Category:** OWASP A01 - Broken Access Control  
+**Severity:** Medium  
+**Problem:** The validation doesn't change behavior. It always redirects regardless of the check.  
+**Example:**
+```
+/next?n=https://evil.com
+```
 
-Categoría: OWASP A01
-Detectabilidad: Media (requiere análisis lógico).
+**SAST Detectability:** Medium (requires logical analysis)
 
-🔟 Lógica de autorización defectuosa
+---
 
-Ubicación: /admin
+### 10. Authorization Logic Flaw
 
-if role == "admin" or role == 1:
+**Location:** `SCATest.py:113-118` (route `/admin`)
 
-Problema sutil:
-request.args siempre retorna string.
-Pero mezcla comparación string/int → error conceptual.
-Además no hay autenticación real.
+```python
+@app.route("/admin")
+def admin():
+    role = request.args.get("role")
+    if role == "admin" or role == 1:
+        return "ok"
+    return "denied"
+```
 
-Categoría: OWASP A01
-Detectabilidad: Baja (SAST raramente detecta lógica defectuosa).
+**Category:** OWASP A01 - Broken Access Control  
+**Severity:** High  
+**Problem:** 
+- `request.args` always returns a string
+- Mixes string/int comparison → conceptual error
+- No real authentication
 
-1️⃣1️⃣ TOCTOU / Race Condition
+**Example:**
+```
+/admin?role=admin
+```
 
-Ubicación: /tmp
+**SAST Detectability:** Low (SAST rarely detects logic flaws)
 
-f = tempfile.NamedTemporaryFile(delete=False)
-...
-return open(f.name).read()
+---
 
-Problema:
-Ventana entre write y reopen.
-Archivo puede ser reemplazado en sistemas compartidos.
+### 11. TOCTOU / Race Condition
 
-Categoría: Security Misconfiguration / Race
-Detectabilidad: Baja.
+**Location:** `SCATest.py:121-127` (route `/tmp`)
 
-1️⃣2️⃣ Debug Mode en producción
-app.run(debug=True)
+```python
+@app.route("/tmp")
+def tmp():
+    data = request.args.get("d")
+    f = tempfile.NamedTemporaryFile(delete=False)
+    f.write(data.encode())
+    f.close()
+    return open(f.name).read()
+```
 
-Impacto:
-Interactive debugger → RCE si expuesto.
-Categoría: OWASP A05
-Detectabilidad: Alta.
+**Category:** Security Misconfiguration / Race Condition  
+**Severity:** Low  
+**Problem:** Time-of-check to time-of-use (TOCTOU) vulnerability. Window between write and reopen. File can be replaced in shared systems.  
+**SAST Detectability:** Low
 
-🔎 Resumen de dificultad para SAST
-Vulnerabilidad	Dificultad para Fortify
-SQL Injection	Fácil
-Command Injection	Fácil
-Insecure Deserialization	Fácil
-Hardcoded Secret	Fácil
-Weak Hash	Fácil
-SSTI	Media
-SSRF	Media
-Path Traversal (check defectuoso)	Media
-Open Redirect lógico	Media
-Authorization flaw	Difícil
-TOCTOU	Difícil
-Debug mode	Fácil
+---
+
+### 12. Debug Mode in Production
+
+**Location:** `SCATest.py:131`
+
+```python
+if __name__ == "__main__":
+    app.run(debug=True)
+```
+
+**Category:** OWASP A05 - Security Misconfiguration  
+**Severity:** High  
+**Problem:** Debug mode enables Werkzeug interactive debugger.  
+**Impact:** RCE if exposed (attacker can execute arbitrary Python code).  
+**SAST Detectability:** High
+
+---
+
+## Summary: SAST Detection Difficulty
+
+| Vulnerability | Fortify Difficulty |
+|--------------|-------------------|
+| SQL Injection | Easy |
+| Command Injection | Easy |
+| Insecure Deserialization | Easy |
+| Hardcoded Secret | Easy |
+| Weak Hash | Easy |
+| SSTI | Medium |
+| SSRF | Medium |
+| Path Traversal (defective check) | Medium |
+| Open Redirect (logical) | Medium |
+| Authorization flaw | Difficult |
+| TOCTOU | Difficult |
+| Debug mode | Easy |
+
+---
+
+## References
+
+- **OWASP Top 10:** https://owasp.org/www-project-top-ten/
+- **CWE Top 25:** https://cwe.mitre.org/top25/
+- **CVE Database:** https://cve.mitre.org/
+
+---
+
+*Document generated - February 22, 2026*
+
+*Research and Analysis: Marcelo Ernesto Burgos Cayupil*

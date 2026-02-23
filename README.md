@@ -93,6 +93,44 @@ Este informe presenta un análisis comparativo riguroso de 5 herramientas de seg
 | 3 | Weak Hash (MD5) | DeepSeek | No detectó uso de MD5 sin secreto |
 | 11 | TOCTOU/Race Condition | Gemini | No detectó race condition |
 
+## Nota sobre la Detección de 13 Vulnerabilidades por Claude
+
+Claude Sonnet 4.6 reportó 13 vulnerabilidades, mientras que el ground truth contiene 12. Esta diferencia se explica por lo siguiente:
+
+### Vulnerabilidad Adicional Detectada
+
+**F7: Plaintext Password Storage (Almacenamiento de Contraseñas en Texto Plano)**
+
+| Atributo | Detalle |
+|----------|---------|
+| **Severidad** | Alta |
+| **Ubicación** | `login()` — `if user and user[2] == p` |
+| **Descripción** | La contraseña se almacena en texto plano en la base de datos y se compara directamente sin hash |
+| **CWE Relacionado** | CWE-259 / CWE-916 |
+| **Impacto** | Compromiso masivo de credenciales ante cualquier exposición de la base de datos |
+
+Esta vulnerabilidad es diferente a:
+- **Hardcoded Secret** (F8): Clave secreta embebida en el código fuente
+- **Weak Hashing (MD5)** (F11): Uso de MD5 para tokens (no para contraseñas)
+
+### Análisis
+
+Claude identificó correctamente que:
+1. Las contraseñas se almacenan sin hash en la base de datos
+2. La comparación `user[2] == p` compara texto plano
+3. Esta es una vulnerabilidad de almacenamiento de credenciales distinta a las otras dos
+
+Aunque esta vulnerabilidad no estaba incluida en el ground truth de 12 vulnerabilidades, la detección es válida y representa un hallazgo de seguridad legítimo que incrementa la seguridad del análisis.
+
+### Impacto en Métricas
+
+| Métrica | Valor Original | Valor Ajustado (12 real) |
+|---------|----------------|-------------------------|
+| Claude Detectadas | 13 | 12 |
+| Claude Precisión | 100% (13/13) | 100% (12/12) |
+
+La precisión de Claude sigue siendo 100% al compararla contra las 12 vulnerabilidades reales del ground truth.
+
 ---
 
 ## Análisis Estadístico
